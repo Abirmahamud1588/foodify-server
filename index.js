@@ -98,6 +98,14 @@ async function run() {
       const result = { admin: user?.role === "admin" };
       res.send(result);
     });
+
+    //userd el
+    app.delete("/users/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await userscollection.deleteOne(query);
+      res.send(result);
+    });
     //admin making
     app.patch("/users/admin/:id", async (req, res) => {
       const id = req.params.id;
@@ -166,6 +174,35 @@ async function run() {
       res.send(result);
     });
 
+    //update a product from the carts for quantity
+    app.put("/carts/:id", async (req, res) => {
+      const id = req.params.id;
+      const { quantity } = req.body;
+      const query = { _id: new ObjectId(id) };
+      const option = { upsert: true };
+      const updatedoc = {
+        $set: {
+          quantity: parseInt(quantity, 10),
+        },
+      };
+      const result = await cartscollection.updateOne(query, updatedoc, option);
+    });
+
+    //order his
+    // Fetch order history for a user
+    app.get("/orders", verifyJwt, async (req, res) => {
+      try {
+        const email = req.decoded.email; // Get the logged-in user's email from the JWT token
+        const userOrders = await paymentCollection.find({ email }).toArray(); // Find orders associated with the user's email
+        res.send(userOrders); // Send the user's order history
+      } catch (error) {
+        console.error("Error fetching order history:", error);
+        res
+          .status(500)
+          .send({ error: true, message: "Error fetching order history" });
+      }
+    });
+
     //payment
     // create payment intent
     app.post("/create-payment-intent", verifyJwt, async (req, res) => {
@@ -193,6 +230,12 @@ async function run() {
       const deleteResult = await cartscollection.deleteMany(query);
 
       res.send({ insertResult, deleteResult });
+    });
+
+    app.get("/payments", verifyJwt, async (req, res) => {
+      const email = req.decoded.email; // Get the logged-in user's email from the JWT token
+      const userPayments = await paymentCollection.find({ email }).toArray(); // Find payments associated with the user's email
+      res.send(userPayments); // Send the filtered payment history
     });
 
     app.get("/admin-stats", verifyJwt, verifyAdmin, async (req, res) => {
@@ -255,6 +298,38 @@ async function run() {
 
       const result = await paymentCollection.aggregate(pipeline).toArray();
       res.send(result);
+    });
+
+    // Add this route definition below the existing routes
+
+    // User stats
+    app.get("/user-stats", verifyJwt, async (req, res) => {
+      try {
+        const email = req.decoded.email; // Get the logged-in user's email from the JWT token
+
+        // Fetch total spent by the user
+        const userPayments = await paymentCollection.find({ email }).toArray();
+        const totalSpent = userPayments.reduce(
+          (total, payment) => total + payment.price,
+          0
+        );
+
+        // Fetch total number of products bought by the user
+        const totalProductsBought = userPayments.reduce(
+          (total, payment) => total + payment.cartItems.length,
+          0
+        );
+
+        res.send({
+          totalSpent,
+          totalProductsBought,
+        });
+      } catch (error) {
+        console.error("Error fetching user stats:", error);
+        res
+          .status(500)
+          .send({ error: true, message: "Error fetching user stats" });
+      }
     });
 
     // Send a ping to confirm a successful connection
